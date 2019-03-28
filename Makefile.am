@@ -28,6 +28,9 @@ xkbprint_LDADD = $(XKBPRINT_LIBS)
 xkbprint_SOURCES =	\
         isokeys.h \
         psgeom.c \
+        ucsgeom.c \
+        ucssymbols.c \
+        ucssymbols.h \
         utils.c \
         utils.h \
         xkbprint.c \

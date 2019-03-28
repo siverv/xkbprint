@@ -33,6 +33,14 @@
 #define LABEL_KEYCODE   2
 #define LABEL_SYMBOLS   3
 
+#define KEY_LEGEND_AUTO -1
+#define KEY_LEGEND_NONE 0
+#define KEY_LEGEND_KEYCODE 1
+#define KEY_LEGEND_KEYNAME 2
+#define KEY_LEGEND_KEYTYPE_FULL 3
+#define KEY_LEGEND_KEYTYPE_ABBR 4
+#define KEY_LEGEND_SYMBOL 5
+
 #define NO_SYMBOLS      0
 #define COMMON_SYMBOLS  1
 #define ALL_SYMBOLS     2
@@ -46,7 +54,15 @@ typedef struct _XKBPrintArgs {
     int         nTotalGroups;
     int         nKBPerPage;
     int         labelLevel;
+    int         nLabelLevels;
     int         wantSymbols;
+    int         legendType;
+    int         legendLength;
+    int         legendGroup;
+    int         legendLevel;
+    int         keyboardCharWidth;
+    float       charRatio;
+    Bool        wantAscii;
     Bool        wantKeycodes;
     Bool        wantDiffs;
     Bool        scaleToFit;
@@ -63,6 +79,13 @@ DumpInternalFont(
 
 extern Bool
 GeometryToPostScript(
+    FILE *              /* out */ ,
+    XkbFileInfo *       /* result */ ,
+    XKBPrintArgs *      /* args */
+);
+
+extern Bool
+GeometryAsUnicodeDiagram(
     FILE *              /* out */ ,
     XkbFileInfo *       /* result */ ,
     XKBPrintArgs *      /* args */

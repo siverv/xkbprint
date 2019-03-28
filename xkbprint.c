@@ -43,6 +43,8 @@
 #include <malloc.h>
 #endif
 
+#define UCS 1
+
 #include <stdlib.h>
 
 #include "utils.h"
@@ -54,6 +56,7 @@
 #define	WANT_DEFAULT	0
 #define	WANT_PS_FILE	1
 #define	WANT_X_SERVER	2
+#define	WANT_UNICODE_DIAGRAM 3
 
 
 static unsigned         outputFormat = WANT_DEFAULT;
@@ -119,6 +122,25 @@ Usage(int argc, char *argv[])
             "-synch        Force synchronization\n"
             "-version      Print program version\n"
             "-w <lvl>      Set warning level (0=none, 10=all)\n"
+#ifdef UCS
+            "-unicode      Unicode diagram instead of postscript\n"
+            "-ascii        Ascii-diagram instead of postscript\n"
+            "-legend <type>\n"
+            "              (-unicode) Text along border of keys. \n"
+            "              Legal values for <type> are:\n"
+            "                  none, code, name, type, typeabbr, symbol\n"
+            "-legend-len <len>\n"
+            "              (-unicode) Length of legend (default 4)\n"
+            "-legend-symgroup <gr>\n"
+            "              (-unicode) If type=symbol, <gr> is the symbol group\n"
+            "-legend-symlevel <lv>\n"
+            "              (-unicode) If type=symbol, <lv> is the symbol level\n"
+            "-nkl <num>    (-unicode) Max number of levels per key (default 4)\n"
+            "              Legal values for <num> are 1..4:\n"
+            "              Offset by base label level (-ll)\n"
+            "-width <w>    (-unicode) Number of characters in width \n"
+            "-cwhr <r>     (-unicode) Character width/height ratio\n"
+#endif /* UCS */
         );
 }
 
@@ -144,6 +166,14 @@ parseArgs(int argc, char *argv[])
     args.nTotalGroups = 0;
     args.nKBPerPage = 0;
     args.labelLevel = 0;
+    args.nLabelLevels = 4;
+    args.legendType = KEY_LEGEND_AUTO;
+    args.legendLength = 4;
+    args.legendGroup = XkbGroup1Index;
+    args.legendLevel = XkbOneLevelIndex;
+    args.keyboardCharWidth = 250;
+    args.charRatio = 1.0 / 2.16;
+    args.wantAscii = False;
     for (i = 1; i < argc; i++) {
         if ((argv[i][0] != '-') || (uStringEqual(argv[i], "-"))) {
             if (inputFile == NULL) {
@@ -401,6 +431,123 @@ parseArgs(int argc, char *argv[])
                     warningLevel = itmp;
             }
         }
+#ifdef UCS
+        else if (strcmp(argv[i], "-unicode") == 0) {
+            outputFormat = WANT_UNICODE_DIAGRAM;
+        }
+        else if (strcmp(argv[i], "-ascii") == 0) {
+            outputFormat = WANT_UNICODE_DIAGRAM;
+            args.wantAscii = True;
+        }
+        else if (strcmp(argv[i], "-legend") == 0) {
+            if (++i >= argc) {
+                uWarning("Legend type not specified\n");
+                uAction("Trailing \"-legend\" option ignored\n");
+            }
+            else if (uStrCaseEqual(argv[i], "none"))
+                args.legendType = KEY_LEGEND_NONE;
+            else if (uStrCaseEqual(argv[i], "name"))
+                args.legendType = KEY_LEGEND_KEYNAME;
+            else if (uStrCaseEqual(argv[i], "code"))
+                args.legendType = KEY_LEGEND_KEYCODE;
+            else if (uStrCaseEqual(argv[i], "type"))
+                args.legendType = KEY_LEGEND_KEYTYPE_FULL;
+            else if (uStrCaseEqual(argv[i], "typeabbr"))
+                args.legendType = KEY_LEGEND_KEYTYPE_ABBR;
+            else if (uStrCaseEqual(argv[i], "symbol"))
+                args.legendType = KEY_LEGEND_SYMBOL;
+            else {
+                uWarning("Unknown legend type \"%s\" specified\n", argv[i]);
+                uAction("Ignored\n");
+            }
+        }
+        else if (strcmp(argv[i], "-legend-length") == 0) {
+            int tmp;
+
+            if (++i >= argc) {
+                uWarning("Legend length not specified\n");
+                uAction("Trailing \"-legend-length\" option ignored\n");
+            }
+            else if ((sscanf(argv[i], "%i", &tmp) != 1) || (tmp < 1) ||
+                     (tmp > 255)) {
+                uWarning("Legend length must be in the range 1..255\n");
+                uAction("Illegal length %d ignored\n", tmp);
+            }
+            else
+                args.legendLength = tmp;
+        }
+        else if (strcmp(argv[i], "-legend-level") == 0) {
+            int tmp;
+
+            if (++i >= argc) {
+                uWarning("Legend symbol level not specified\n");
+                uAction("Trailing \"-legend-level\" option ignored\n");
+            }
+            else if ((sscanf(argv[i], "%i", &tmp) != 1) || (tmp < 1) ||
+                     (tmp > 8)) {
+                uWarning("Legend symbol level must be in the range 1..8\n");
+                uAction("Illegal length %d ignored\n", tmp);
+            }
+            else
+                args.legendLevel = tmp - 1;
+        }
+        else if (strcmp(argv[i], "-legend-group") == 0) {
+            int tmp;
+
+            if (++i >= argc) {
+                uWarning("Legend symbol group not specified\n");
+                uAction("Trailing \"-legend-group\" option ignored\n");
+            }
+            else if ((sscanf(argv[i], "%i", &tmp) != 1) || (tmp < 1) ||
+                     (tmp > 4)) {
+                uWarning("Legend symbol group must be in the range 1..4\n");
+                uAction("Illegal length %d ignored\n", tmp);
+            }
+            else
+                args.legendGroup = tmp - 1;
+        }
+        else if (strcmp(argv[i], "-nkl") == 0) {
+            int tmp;
+
+            if (++i >= argc) {
+                uWarning("Number of levels per key not specified\n");
+                uAction("Trailing \"-nkl\" option ignored\n");
+            }
+            else if ((sscanf(argv[i], "%i", &tmp) != 1) || (tmp < 1) ||
+                     (tmp > 4)) {
+                uWarning("Levels per key must be in the range 1..4\n");
+                uAction("Illegal number of levels %d ignored\n", tmp);
+            }
+            else
+                args.nLabelLevels = tmp;
+        }
+        else if (strcmp(argv[i], "-width") == 0) {
+            int width;
+            if (++i >= argc) {
+                uWarning("Keyboard width in characters not specified\n");
+                uAction("Trailing \"-width\" option ignored\n");
+            }
+            else if ((sscanf(argv[i], "%i", &width) != 1) || (width < 100) || (width > 600)) {
+                uWarning("Width must be in range 100...600\n");
+                uAction("Illegal width %d ignored\n", width);
+            }
+            else
+                args.keyboardCharWidth = width;
+        }
+        else if (strcmp(argv[i], "-cwhr") == 0) {
+            float ratio;
+            if (++i >= argc) {
+                uWarning("Character width/height ratio not specified\n");
+                uAction("Trailing \"-chwr\" option ignored\n");
+            }
+            else if ((sscanf(argv[i], "%f", &ratio) != 1) || (ratio <= 0)) {
+                uWarning("Ratio must be a float greater than 0\n");
+                uAction("Illegal ratio %f ignored\n", ratio);
+            }
+            else
+                args.charRatio = ratio;
+        }
+#endif /* UCS */
         else {
             uError("Unknown flag \"%s\" on command line\n", argv[i]);
             Usage(argc, argv);
@@ -707,6 +854,22 @@ main(int argc, char *argv[])
             uAction("Cannot label keys as requested. Exiting\n");
             ok = False;
         }
+#ifdef UCS
+        if (args.legendType == KEY_LEGEND_AUTO) {
+            args.legendType = KEY_LEGEND_KEYNAME;
+        }
+        else if ((args.legendType == KEY_LEGEND_KEYCODE) &&
+                 ((tmp & XkmKeyNamesMask) != 0)) {
+            uError("XKM file \"%s\" doesn't have keycodes\n", inputFile);
+            uAction("Cannot legendType keys as requested. Exiting\n");
+            ok = False;
+        }
+        else if ((args.legendType == KEY_LEGEND_SYMBOL) && ((tmp & XkmSymbolsMask) != 0)) {
+            uError("XKM file \"%s\" doesn't have symbols\n", inputFile);
+            uAction("Cannot legendType keys as requested. Exiting\n");
+            ok = False;
+        }
+#endif /* UCS */
     }
     else if (inDpy != NULL) {
         bzero((char *) &result, sizeof(result));
@@ -721,6 +884,11 @@ main(int argc, char *argv[])
         }
         if (args.label == LABEL_AUTO)
             args.label = LABEL_SYMBOLS;
+#ifdef UCS
+        if (args.legendType == KEY_LEGEND_AUTO) {
+            args.legendType = KEY_LEGEND_KEYNAME;
+        }
+#endif /* UCS */
     }
     else {
         fprintf(stderr, "Cannot open \"%s\" to read geometry\n", inputFile);
@@ -763,6 +931,9 @@ main(int argc, char *argv[])
         switch (outputFormat) {
         case WANT_PS_FILE:
             ok = GeometryToPostScript(out, &result, &args);
+            break;
+        case WANT_UNICODE_DIAGRAM:
+            ok = GeometryAsUnicodeDiagram(out, &result, &args);
             break;
         case WANT_X_SERVER:
             uInternalError("Output to X server not implemented yet\n");
